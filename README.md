@@ -18,49 +18,64 @@ Convert Indian Sign Language (ISL) videos into animated 3D sign-language avatars
 *   **Processing** → MediaPipe Holistic extracts body and hand landmarks per frame on the Python FastAPI server.
 *   **Output** → Animated 3D humanoid avatar mirroring the signer's movements inside a WebView using Three.js.
 
-## Getting Started
+---
 
-### 1. Start the Backend Server
+## Detailed Step-by-Step Running Guide (Windows PowerShell)
 
-```bash
-# Navigate to backend directory
-cd backend
+Follow these exact steps to launch and connect both the backend and frontend components.
 
-# Create & activate a virtual environment (optional but recommended)
-python -m venv venv
-.\venv\Scripts\activate  # On Windows
+### Step 1: Find Your Computer's LAN IP Address
+Since your phone needs to connect to the backend server running on your computer, both devices must be on the **same Wi-Fi network**.
+1. Open a PowerShell or Command Prompt window.
+2. Type the following command and press Enter:
+   ```powershell
+   ipconfig
+   ```
+3. Locate the **IPv4 Address** under your active network adapter (e.g., `192.168.1.100`). Note this down.
 
-# Install Python dependencies
-pip install -r requirements.txt
+---
 
-# Start the FastAPI server
-python app.py
-```
-*Alternatively, you can run the `start.bat` script in the project root to start the backend.*
+### Step 2: Run the Backend Server
+1. Open a new PowerShell window.
+2. Navigate to your project folder:
+   ```powershell
+   cd "c:\Users\vijay\OneDrive\Desktop\final_year_project\FYP_mobileprototype-"
+   ```
+3. Start the backend by running:
+   ```powershell
+   .\start.bat
+   ```
+   *(Keep this terminal open and running. The server starts on port `8000`)*.
 
-### 2. Start the Mobile Client (Expo)
+---
 
-Make sure you have Node.js installed.
+### Step 3: Run the Mobile Dev Server (Expo)
+1. Open a **second** PowerShell window.
+2. Navigate to your project folder:
+   ```powershell
+   cd "c:\Users\vijay\OneDrive\Desktop\final_year_project\FYP_mobileprototype-"
+   ```
+3. Start the mobile app server by running:
+   ```powershell
+   .\start_mobile.bat
+   ```
+   *(Keep this terminal open and running. It will start the Expo dev server and display a QR code)*.
 
-```bash
-# Navigate to frontend directory
-cd frontend
+---
 
-# Install JavaScript dependencies
-npm install
+### Step 4: Launch and Configure the Mobile App
+1. Install the **Expo Go** app on your phone (from Google Play Store or iOS App Store).
+2. Open Expo Go (or your camera app on iOS) and scan the QR code displayed in the second PowerShell terminal.
+3. Once the app loads on your phone:
+   * Tap the **Settings gear icon** in the top-right corner.
+   * Update the **Backend URL** field to point to your computer's LAN IP using port `8000`. For example:
+     ```
+     http://192.168.1.100:8000
+     ```
+   * Save settings and return to the main screen.
+4. Try the **Demo Mode** or upload a video from your gallery to view the 3D sign-language avatar.
 
-# Start the Expo development server
-npx expo start
-```
-*Alternatively, you can run the `start_mobile.bat` script in the project root to start the Expo dev server.*
-
-### 3. Connect and Test
-
-1. Ensure both your computer running the backend and your mobile device running **Expo Go** are connected to the same Wi-Fi network.
-2. Find your local IP address (LAN IP) by running `ipconfig` on Windows or `ifconfig` on macOS/Linux.
-3. Launch the mobile app by scanning the QR code displayed in the Expo CLI with your phone's camera (iOS) or the Expo Go app (Android).
-4. In the app settings (accessible via the settings gear icon), update the **Backend URL** to point to your backend's LAN IP (e.g., `http://192.168.1.100:8000`).
-5. Process a test video or launch the **Demo Mode** to watch the animated 3D avatar mirror sign language movements.
+---
 
 ## Tech Stack
 
