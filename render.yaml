@@ -1,11 +1,9 @@
 services:
   - type: web
     name: signavatar-backend
-    env: python
+    env: docker
     region: oregon
     plan: free
-    buildCommand: "pip install -r backend/requirements.txt"
-    startCommand: "cd backend && uvicorn app:app --host 0.0.0.0 --port $PORT"
     envVars:
       - key: PYTHON_VERSION
         value: 3.10.12
