@@ -17,5 +17,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY backend/ ./backend/
 
-# Render sets the PORT environment variable
-CMD uvicorn backend.app:app --host 0.0.0.0 --port $PORT
+WORKDIR /app/backend
+CMD sh -c "uvicorn app:app --host 0.0.0.0 --port ${PORT:-8000}"
