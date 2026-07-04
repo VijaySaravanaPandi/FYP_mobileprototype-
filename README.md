@@ -31,31 +31,33 @@ Since your phone needs to connect to the backend server running on your computer
    ```powershell
    ipconfig
    ```
-3. Locate the **IPv4 Address** under your active network adapter (e.g., `192.168.1.100`). Note this down.
+3. Locate the **IPv4 Address** under your active network adapter (e.g., `192.168.1.17`). Note this down.
 
 ---
 
-### Step 2: Run the Backend Server
-1. Open a new PowerShell window.
-2. Navigate to your project folder:
-   ```powershell
-   cd "c:\Users\vijay\OneDrive\Desktop\final_year_project\FYP_mobileprototype-"
-   ```
-3. Start the backend by running:
+### Step 2: Open the Project Directory
+Open **two separate** PowerShell terminal windows. In both windows, navigate to the folder where you saved this project.
+
+*Example command (replace the path below with the path where you saved the project on your laptop):*
+```powershell
+cd "C:\path\to\your\folder\FYP_mobileprototype-"
+```
+> [!TIP]
+> **Shortcut:** You can also open the project folder in VS Code, and open two terminals inside VS Code. They will automatically open in the correct folder!
+
+---
+
+### Step 3: Run the Backend Server
+1. In the **first** PowerShell window (navigated to the project folder), run:
    ```powershell
    .\start.bat
    ```
-   *(Keep this terminal open and running. The server starts on port `8000`)*.
+   *(Keep this terminal open and running. The backend API server starts on port `8000`)*.
 
 ---
 
-### Step 3: Run the Mobile Dev Server (Expo)
-1. Open a **second** PowerShell window.
-2. Navigate to your project folder:
-   ```powershell
-   cd "c:\Users\vijay\OneDrive\Desktop\final_year_project\FYP_mobileprototype-"
-   ```
-3. Start the mobile app server by running:
+### Step 4: Run the Mobile Dev Server (Expo)
+1. In the **second** PowerShell window (navigated to the project folder), run:
    ```powershell
    .\start_mobile.bat
    ```
@@ -63,15 +65,16 @@ Since your phone needs to connect to the backend server running on your computer
 
 ---
 
-### Step 4: Launch and Configure the Mobile App
+### Step 5: Launch and Configure the Mobile App
 1. Install the **Expo Go** app on your phone (from Google Play Store or iOS App Store).
 2. Open Expo Go (or your camera app on iOS) and scan the QR code displayed in the second PowerShell terminal.
 3. Once the app loads on your phone:
    * Tap the **Settings gear icon** in the top-right corner.
-   * Update the **Backend URL** field to point to your computer's LAN IP using port `8000`. For example:
+   * Update the **Backend URL** field to point to your computer's LAN IP using port `8000` (e.g., using the IP you found in Step 1):
      ```
-     http://192.168.1.100:8000
+     http://<YOUR_LAN_IP>:8000
      ```
+     *(Example: `http://192.168.1.17:8000`)*
    * Save settings and return to the main screen.
 4. Try the **Demo Mode** or upload a video from your gallery to view the 3D sign-language avatar.
 
