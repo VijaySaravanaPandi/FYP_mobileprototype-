@@ -22,29 +22,268 @@
             display: block;
         }
     </style>
-    <!-- Three.js ESM via unpkg -->
-    <script type="importmap">
-    {
-        "imports": {
-            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-        }
-    }
-    </script>
+    <!-- Three.js global UMD build (r128 is the last version with a proper UMD/global build on cdnjs) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
 
     <canvas id="avatar-canvas"></canvas>
 
-    <script type="module">
-        import * as THREE from "three";
-        import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-        import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
-        import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
-        import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+    <script>
+        // ==========================================
+        // OrbitControls (inline, from Three.js r160)
+        // ==========================================
+        (function() {
+            var STATE = { NONE: -1, ROTATE: 0, DOLLY: 1, PAN: 2, TOUCH_ROTATE: 3, TOUCH_PAN: 4, TOUCH_DOLLY_PAN: 5, TOUCH_DOLLY_ROTATE: 6 };
+
+            function OrbitControls(object, domElement) {
+                this.object = object;
+                this.domElement = domElement;
+                this.enabled = true;
+                this.target = new THREE.Vector3();
+                this.minDistance = 0;
+                this.maxDistance = Infinity;
+                this.minPolarAngle = 0;
+                this.maxPolarAngle = Math.PI;
+                this.enableDamping = false;
+                this.dampingFactor = 0.05;
+                this.enableZoom = true;
+                this.enableRotate = true;
+                this.enablePan = true;
+                this.rotateSpeed = 1.0;
+                this.zoomSpeed = 1.0;
+                this.panSpeed = 1.0;
+
+                var scope = this;
+                var spherical = new THREE.Spherical();
+                var sphericalDelta = new THREE.Spherical();
+                var scale = 1;
+                var panOffset = new THREE.Vector3();
+                var state = STATE.NONE;
+                var rotateStart = new THREE.Vector2();
+                var rotateEnd = new THREE.Vector2();
+                var rotateDelta = new THREE.Vector2();
+                var panStart = new THREE.Vector2();
+                var panEnd = new THREE.Vector2();
+                var panDelta = new THREE.Vector2();
+                var dollyStart = new THREE.Vector2();
+                var dollyEnd = new THREE.Vector2();
+                var dollyDelta = new THREE.Vector2();
+                var offset = new THREE.Vector3();
+                var quat = new THREE.Quaternion().setFromUnitVectors(object.up, new THREE.Vector3(0, 1, 0));
+                var quatInverse = quat.clone().invert();
+
+                this.update = function() {
+                    var position = scope.object.position;
+                    offset.copy(position).sub(scope.target);
+                    offset.applyQuaternion(quat);
+                    spherical.setFromVector3(offset);
+
+                    if (scope.enableDamping) {
+                        spherical.theta += sphericalDelta.theta * scope.dampingFactor;
+                        spherical.phi += sphericalDelta.phi * scope.dampingFactor;
+                    } else {
+                        spherical.theta += sphericalDelta.theta;
+                        spherical.phi += sphericalDelta.phi;
+                    }
+
+                    spherical.phi = Math.max(scope.minPolarAngle, Math.min(scope.maxPolarAngle, spherical.phi));
+                    spherical.makeSafe();
+                    spherical.radius *= scale;
+                    spherical.radius = Math.max(scope.minDistance, Math.min(scope.maxDistance, spherical.radius));
+
+                    if (scope.enableDamping) {
+                        scope.target.addScaledVector(panOffset, scope.dampingFactor);
+                    } else {
+                        scope.target.add(panOffset);
+                    }
+
+                    offset.setFromSpherical(spherical);
+                    offset.applyQuaternion(quatInverse);
+                    position.copy(scope.target).add(offset);
+                    scope.object.lookAt(scope.target);
+
+                    if (scope.enableDamping) {
+                        sphericalDelta.theta *= (1 - scope.dampingFactor);
+                        sphericalDelta.phi *= (1 - scope.dampingFactor);
+                        panOffset.multiplyScalar(1 - scope.dampingFactor);
+                    } else {
+                        sphericalDelta.set(0, 0, 0);
+                        panOffset.set(0, 0, 0);
+                    }
+                    scale = 1;
+                    return false;
+                };
+
+                this.dispose = function() {
+                    scope.domElement.removeEventListener('pointerdown', onPointerDown);
+                    scope.domElement.removeEventListener('pointercancel', onPointerUp);
+                    scope.domElement.removeEventListener('wheel', onMouseWheel);
+                    scope.domElement.removeEventListener('pointermove', onPointerMove);
+                    scope.domElement.removeEventListener('pointerup', onPointerUp);
+                    scope.domElement.removeEventListener('touchstart', onTouchStart);
+                    scope.domElement.removeEventListener('touchmove', onTouchMove);
+                    scope.domElement.removeEventListener('touchend', onTouchEnd);
+                };
+
+                function rotateLeft(angle) { sphericalDelta.theta -= angle; }
+                function rotateUp(angle) { sphericalDelta.phi -= angle; }
+                function panLeft(distance, objectMatrix) {
+                    var v = new THREE.Vector3();
+                    v.setFromMatrixColumn(objectMatrix, 0);
+                    v.multiplyScalar(-distance);
+                    panOffset.add(v);
+                }
+                function panUp(distance, objectMatrix) {
+                    var v = new THREE.Vector3();
+                    v.setFromMatrixColumn(objectMatrix, 1);
+                    v.multiplyScalar(distance);
+                    panOffset.add(v);
+                }
+                function pan(deltaX, deltaY) {
+                    var element = scope.domElement;
+                    var position = scope.object.position;
+                    offset.copy(position).sub(scope.target);
+                    var targetDistance = offset.length();
+                    targetDistance *= Math.tan((scope.object.fov / 2) * Math.PI / 180.0);
+                    panLeft(2 * deltaX * targetDistance / element.clientHeight, scope.object.matrix);
+                    panUp(2 * deltaY * targetDistance / element.clientHeight, scope.object.matrix);
+                }
+                function dollyOut(dollyScale) { scale /= dollyScale; }
+                function dollyIn(dollyScale) { scale *= dollyScale; }
+                function getZoomScale() { return Math.pow(0.95, scope.zoomSpeed); }
+
+                var pointers = [];
+                function onPointerDown(event) {
+                    if (!scope.enabled) return;
+                    if (pointers.length === 0) {
+                        scope.domElement.setPointerCapture(event.pointerId);
+                    }
+                    pointers.push(event);
+                    if (event.pointerType === 'touch') {
+                        onTouchStartHandler(event);
+                    } else {
+                        onMouseDown(event);
+                    }
+                }
+                function onPointerMove(event) {
+                    if (!scope.enabled) return;
+                    if (event.pointerType === 'touch') {
+                        onTouchMoveHandler(event);
+                    } else {
+                        onMouseMove(event);
+                    }
+                }
+                function onPointerUp(event) {
+                    for (var i = 0; i < pointers.length; i++) {
+                        if (pointers[i].pointerId == event.pointerId) {
+                            pointers.splice(i, 1);
+                            break;
+                        }
+                    }
+                    if (pointers.length === 0) {
+                        scope.domElement.releasePointerCapture(event.pointerId);
+                    }
+                    state = STATE.NONE;
+                }
+
+                function onMouseDown(event) {
+                    switch (event.button) {
+                        case 0: state = STATE.ROTATE; rotateStart.set(event.clientX, event.clientY); break;
+                        case 1: state = STATE.DOLLY; dollyStart.set(event.clientX, event.clientY); break;
+                        case 2: state = STATE.PAN; panStart.set(event.clientX, event.clientY); break;
+                    }
+                }
+                function onMouseMove(event) {
+                    if (state === STATE.ROTATE) {
+                        rotateEnd.set(event.clientX, event.clientY);
+                        rotateDelta.subVectors(rotateEnd, rotateStart).multiplyScalar(scope.rotateSpeed);
+                        rotateLeft(2 * Math.PI * rotateDelta.x / scope.domElement.clientHeight);
+                        rotateUp(2 * Math.PI * rotateDelta.y / scope.domElement.clientHeight);
+                        rotateStart.copy(rotateEnd);
+                    } else if (state === STATE.DOLLY) {
+                        dollyEnd.set(event.clientX, event.clientY);
+                        dollyDelta.subVectors(dollyEnd, dollyStart);
+                        if (dollyDelta.y > 0) dollyOut(getZoomScale());
+                        else if (dollyDelta.y < 0) dollyIn(getZoomScale());
+                        dollyStart.copy(dollyEnd);
+                    } else if (state === STATE.PAN) {
+                        panEnd.set(event.clientX, event.clientY);
+                        panDelta.subVectors(panEnd, panStart).multiplyScalar(scope.panSpeed);
+                        pan(panDelta.x, panDelta.y);
+                        panStart.copy(panEnd);
+                    }
+                }
+                function onMouseWheel(event) {
+                    if (!scope.enabled || !scope.enableZoom) return;
+                    event.preventDefault();
+                    if (event.deltaY < 0) dollyIn(getZoomScale());
+                    else if (event.deltaY > 0) dollyOut(getZoomScale());
+                }
+
+                var touchStartDist = 0;
+                function onTouchStartHandler(event) {
+                    trackPointer(event);
+                    if (pointers.length === 1) {
+                        state = STATE.TOUCH_ROTATE;
+                        rotateStart.set(pointers[0].pageX, pointers[0].pageY);
+                    } else if (pointers.length === 2) {
+                        state = STATE.TOUCH_DOLLY_PAN;
+                        var dx = pointers[0].pageX - pointers[1].pageX;
+                        var dy = pointers[0].pageY - pointers[1].pageY;
+                        touchStartDist = Math.sqrt(dx * dx + dy * dy);
+                        var cx = (pointers[0].pageX + pointers[1].pageX) * 0.5;
+                        var cy = (pointers[0].pageY + pointers[1].pageY) * 0.5;
+                        panStart.set(cx, cy);
+                    }
+                }
+                function onTouchMoveHandler(event) {
+                    trackPointer(event);
+                    if (state === STATE.TOUCH_ROTATE && pointers.length === 1) {
+                        rotateEnd.set(event.pageX, event.pageY);
+                        rotateDelta.subVectors(rotateEnd, rotateStart).multiplyScalar(scope.rotateSpeed);
+                        rotateLeft(2 * Math.PI * rotateDelta.x / scope.domElement.clientHeight);
+                        rotateUp(2 * Math.PI * rotateDelta.y / scope.domElement.clientHeight);
+                        rotateStart.copy(rotateEnd);
+                    } else if (state === STATE.TOUCH_DOLLY_PAN && pointers.length === 2) {
+                        var dx = pointers[0].pageX - pointers[1].pageX;
+                        var dy = pointers[0].pageY - pointers[1].pageY;
+                        var dist = Math.sqrt(dx * dx + dy * dy);
+                        var dollyScale = dist / touchStartDist;
+                        scale *= dollyScale;
+                        touchStartDist = dist;
+                        var cx = (pointers[0].pageX + pointers[1].pageX) * 0.5;
+                        var cy = (pointers[0].pageY + pointers[1].pageY) * 0.5;
+                        panEnd.set(cx, cy);
+                        panDelta.subVectors(panEnd, panStart).multiplyScalar(scope.panSpeed);
+                        pan(panDelta.x, panDelta.y);
+                        panStart.copy(panEnd);
+                    }
+                }
+                function trackPointer(event) {
+                    for (var i = 0; i < pointers.length; i++) {
+                        if (pointers[i].pointerId == event.pointerId) { pointers[i] = event; return; }
+                    }
+                }
+                function onTouchStart(e) { }
+                function onTouchMove(e) { }
+                function onTouchEnd(e) { }
+
+                scope.domElement.addEventListener('pointerdown', onPointerDown);
+                scope.domElement.addEventListener('pointercancel', onPointerUp);
+                scope.domElement.addEventListener('wheel', onMouseWheel, { passive: false });
+                scope.domElement.addEventListener('pointermove', onPointerMove);
+                scope.domElement.addEventListener('pointerup', onPointerUp);
+            }
+            window.OrbitControls = OrbitControls;
+        })();
+
+        // ==========================================================
+        // SignAvatar - Three.js 3D avatar (global/UMD version)
+        // ==========================================================
 
         // Landmark mappings
-        const POSE = {
+        var POSE = {
             NOSE: 0,
             L_EYE_INNER: 1, L_EYE: 2, L_EYE_OUTER: 3,
             R_EYE_INNER: 4, R_EYE: 5, R_EYE_OUTER: 6,
@@ -63,7 +302,7 @@
             L_FOOT: 31,     R_FOOT: 32,
         };
 
-        const BODY_BONES = [
+        var BODY_BONES = [
             [POSE.L_SHOULDER, POSE.R_SHOULDER, 0.028, 0.028],
             [POSE.L_HIP,      POSE.R_HIP,      0.028, 0.028],
             [POSE.L_SHOULDER, POSE.L_HIP,      0.025, 0.022],
@@ -82,7 +321,7 @@
             [POSE.R_ANKLE,    POSE.R_FOOT,     0.014, 0.010],
         ];
 
-        const FACE_BONES = [
+        var FACE_BONES = [
             [POSE.L_EAR, POSE.L_EYE],
             [POSE.R_EAR, POSE.R_EYE],
             [POSE.L_EYE, POSE.NOSE],
@@ -90,35 +329,36 @@
             [POSE.MOUTH_L, POSE.MOUTH_R],
         ];
 
-        const FINGER_CHAINS = [
-            [0, 1, 2, 3, 4],     // thumb
-            [0, 5, 6, 7, 8],     // index
-            [0, 9, 10, 11, 12],  // middle
-            [0, 13, 14, 15, 16], // ring
-            [0, 17, 18, 19, 20], // pinky
+        var FINGER_CHAINS = [
+            [0, 1, 2, 3, 4],
+            [0, 5, 6, 7, 8],
+            [0, 9, 10, 11, 12],
+            [0, 13, 14, 15, 16],
+            [0, 17, 18, 19, 20],
         ];
-        const PALM_LINKS = [[5, 9], [9, 13], [13, 17], [0, 5], [0, 17]];
-        const FINGER_RADII = [
+        var PALM_LINKS = [[5, 9], [9, 13], [13, 17], [0, 5], [0, 17]];
+        var FINGER_RADII = [
             [0.010, 0.008],
             [0.008, 0.006],
             [0.006, 0.005],
             [0.005, 0.004],
         ];
 
-        const WORLD_HEIGHT = 5.0;
-        const Z_SCALE      = 1.8;
-        let _aspectRatio = 4 / 3;
+        var WORLD_HEIGHT = 5.0;
+        var Z_SCALE      = 1.8;
+        var _aspectRatio  = 4 / 3;
 
         function setVideoAspect(w, h) {
             _aspectRatio = (w && h && h > 0) ? w / h : 4 / 3;
         }
 
-        function toWorld(lm, mirror = false) {
-            const xs = mirror ? -1 : 1;
+        function toWorld(lm, mirror) {
+            mirror = mirror || false;
+            var xs = mirror ? -1 : 1;
             return new THREE.Vector3(
                 (lm.x - 0.5) * WORLD_HEIGHT * _aspectRatio * xs,
                 -(lm.y - 0.5) * WORLD_HEIGHT,
-                -(lm.z ?? 0) * Z_SCALE
+                -(lm.z || 0) * Z_SCALE
             );
         }
 
@@ -126,451 +366,458 @@
             return {
                 x: a.x + (b.x - a.x) * t,
                 y: a.y + (b.y - a.y) * t,
-                z: (a.z ?? 0) + ((b.z ?? 0) - (a.z ?? 0)) * t,
-                v: (a.v ?? 1),
+                z: (a.z || 0) + ((b.z || 0) - (a.z || 0)) * t,
+                v: (a.v == null ? 1 : a.v),
             };
         }
 
         function lerpFrame(f0, f1, t) {
             if (!f0) return f1;
             if (!f1) return f0;
-            const out = { pose: null, left_hand: null, right_hand: null };
+            var out = { pose: null, left_hand: null, right_hand: null };
 
             if (f0.pose && f1.pose)
-                out.pose = f0.pose.map((lm, i) => lerpLm(lm, f1.pose[i], t));
+                out.pose = f0.pose.map(function(lm, i) { return lerpLm(lm, f1.pose[i], t); });
             else
                 out.pose = f0.pose || f1.pose;
 
             if (f0.left_hand && f1.left_hand)
-                out.left_hand = f0.left_hand.map((lm, i) => lerpLm(lm, f1.left_hand[i], t));
+                out.left_hand = f0.left_hand.map(function(lm, i) { return lerpLm(lm, f1.left_hand[i], t); });
             else
                 out.left_hand = f0.left_hand || f1.left_hand;
 
             if (f0.right_hand && f1.right_hand)
-                out.right_hand = f0.right_hand.map((lm, i) => lerpLm(lm, f1.right_hand[i], t));
+                out.right_hand = f0.right_hand.map(function(lm, i) { return lerpLm(lm, f1.right_hand[i], t); });
             else
                 out.right_hand = f0.right_hand || f1.right_hand;
 
             return out;
         }
 
-        const EMA_ALPHA = 0.55;
+        var EMA_ALPHA = 0.55;
         function smoothArray(prev, next, alpha) {
             if (!prev || !next) return next;
-            return next.map((lm, i) => ({
-                x: prev[i].x + alpha * (lm.x - prev[i].x),
-                y: prev[i].y + alpha * (lm.y - prev[i].y),
-                z: (prev[i].z ?? 0) + alpha * ((lm.z ?? 0) - (prev[i].z ?? 0)),
-                v: lm.v ?? 1,
-            }));
-        }
-
-        export class SignAvatar {
-            constructor(canvas) {
-                this.canvas = canvas;
-                this.mirror  = false;
-                this.disposed = false;
-
-                // Playback
-                this.landmarkData  = null;
-                this.currentFrame  = 0;
-                this.playing       = false;
-                this.speed         = 1.0;
-                this.fps           = 30;
-                this._subT         = 0;
-                this._lastTime     = 0;
-                this._smoothPose   = null;
-                this._smoothLH     = null;
-                this._smoothRH     = null;
-
-                // Mesh pools
-                this._boneMeshes  = [];
-                this._faceMeshes  = [];
-                this._spineMesh   = null;
-                this._neckMesh    = null;
-                this._headSphere  = null;
-                this._jointMeshes = [];
-                this._lJoints = []; this._lBones = [];
-                this._rJoints = []; this._rBones = [];
-
-                this._initScene();
-                this._buildAvatar();
-                this._animate = this._animate.bind(this);
-                this._onResize = this._onResize.bind(this);
-                window.addEventListener("resize", this._onResize);
-                this._animate(0);
-            }
-
-            _initScene() {
-                const w = window.innerWidth;
-                const h = window.innerHeight;
-
-                this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true, alpha: true });
-                this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-                this.renderer.setSize(w, h);
-                this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-                this.renderer.toneMappingExposure = 1.15;
-
-                this.scene  = new THREE.Scene();
-                this.camera = new THREE.PerspectiveCamera(48, w / h, 0.05, 100);
-                this.camera.position.set(0, 0.5, 4.2);
-
-                this.controls = new OrbitControls(this.camera, this.canvas);
-                this.controls.enableDamping  = true;
-                this.controls.dampingFactor  = 0.07;
-                this.controls.target.set(0, 0.2, 0);
-                this.controls.minDistance = 1.0;
-                this.controls.maxDistance = 12;
-
-                // Bloom
-                this.composer = new EffectComposer(this.renderer);
-                this.composer.addPass(new RenderPass(this.scene, this.camera));
-                this.composer.addPass(new UnrealBloomPass(new THREE.Vector2(w, h), 0.55, 0.38, 0.88));
-
-                // Lighting
-                this.scene.add(new THREE.AmbientLight(0x3344aa, 0.75));
-                const key = new THREE.DirectionalLight(0xb0d0ff, 1.1);
-                key.position.set(2, 5, 4); this.scene.add(key);
-                const fill = new THREE.DirectionalLight(0x7744cc, 0.35);
-                fill.position.set(-3, 1, -2); this.scene.add(fill);
-                const rim = new THREE.DirectionalLight(0x00ffff, 0.2);
-                rim.position.set(0, -2, 3); this.scene.add(rim);
-
-                // Floor grid
-                const grid = new THREE.GridHelper(10, 32, 0x111133, 0x0a0a22);
-                grid.position.y = -2.6; this.scene.add(grid);
-
-                const pg = new THREE.PlaneGeometry(12, 12);
-                const pm = new THREE.MeshStandardMaterial({ color: 0x06060f, transparent: true, opacity: 0.55, metalness: 0.85, roughness: 0.7 });
-                const plane = new THREE.Mesh(pg, pm);
-                plane.rotation.x = -Math.PI / 2; plane.position.y = -2.62;
-                this.scene.add(plane);
-
-                this._createParticles();
-            }
-
-            _createParticles() {
-                const count = 250;
-                const pos   = new Float32Array(count * 3);
-                for (let i = 0; i < count; i++) {
-                    pos[i * 3]     = (Math.random() - 0.5) * 14;
-                    pos[i * 3 + 1] = (Math.random() - 0.5) * 10;
-                    pos[i * 3 + 2] = (Math.random() - 0.5) * 10;
-                }
-                const geo = new THREE.BufferGeometry();
-                geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-                this._particles = new THREE.Points(geo,
-                    new THREE.PointsMaterial({ color: 0x00e5ff, size: 0.018, transparent: true, opacity: 0.28, sizeAttenuation: true }));
-                this.scene.add(this._particles);
-            }
-
-            _jMat(color, ei = 0.65) {
-                return new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: ei, metalness: 0.15, roughness: 0.3 });
-            }
-            _bMat(color, opacity = 0.9) {
-                return new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.22, metalness: 0.1, roughness: 0.5, transparent: opacity < 1, opacity });
-            }
-
-            _makeTaperedBone(rTop, rBot) {
-                return new THREE.CylinderGeometry(rTop, rBot, 1, 8, 1);
-            }
-
-            _buildAvatar() {
-                const BODY_J  = 0x00e5ff;
-                const BODY_B  = 0x007a8a;
-                const HAND_J  = 0xffcc44;
-                const HAND_B  = 0xe08c00;
-                const HEAD_C  = 0x22eeff;
-                const FACE_C  = 0x005566;
-                const SPINE_C = 0x0088aa;
-
-                const jGeo = new THREE.IcosahedronGeometry(0.038, 2);
-                const jMat = this._jMat(BODY_J);
-                for (let i = 0; i < 33; i++) {
-                    const m = new THREE.Mesh(jGeo, jMat);
-                    m.visible = false;
-                    this.scene.add(m);
-                    this._jointMeshes.push(m);
-                }
-
-                this._headSphere = new THREE.Mesh(
-                    new THREE.IcosahedronGeometry(0.18, 3),
-                    this._jMat(HEAD_C, 0.35)
-                );
-                this._headSphere.visible = false;
-                this.scene.add(this._headSphere);
-
-                this._spineMesh = new THREE.Mesh(this._makeTaperedBone(0.030, 0.026), this._bMat(SPINE_C));
-                this._spineMesh.visible = false;
-                this.scene.add(this._spineMesh);
-
-                this._neckMesh = new THREE.Mesh(this._makeTaperedBone(0.022, 0.016), this._bMat(SPINE_C));
-                this._neckMesh.visible = false;
-                this.scene.add(this._neckMesh);
-
-                for (const [, , rt, rb] of BODY_BONES) {
-                    const m = new THREE.Mesh(this._makeTaperedBone(rt, rb), this._bMat(BODY_B));
-                    m.visible = false;
-                    this.scene.add(m);
-                    this._boneMeshes.push(m);
-                }
-
-                for (let i = 0; i < FACE_BONES.length; i++) {
-                    const m = new THREE.Mesh(this._makeTaperedBone(0.007, 0.007), this._bMat(FACE_C, 0.7));
-                    m.visible = false;
-                    this.scene.add(m);
-                    this._faceMeshes.push(m);
-                }
-
-                this._buildHand(this._lJoints, this._lBones, HAND_J, HAND_B);
-                this._buildHand(this._rJoints, this._rBones, HAND_J, HAND_B);
-            }
-
-            _buildHand(joints, bones, jColor, bColor) {
-                const jGeo = new THREE.IcosahedronGeometry(0.016, 1);
-                const jMat = this._jMat(jColor, 0.75);
-
-                for (let i = 0; i < 21; i++) {
-                    const m = new THREE.Mesh(jGeo, jMat);
-                    m.visible = false;
-                    this.scene.add(m);
-                    joints.push(m);
-                }
-
-                for (const chain of FINGER_CHAINS) {
-                    for (let s = 0; s < chain.length - 1; s++) {
-                        const [rt, rb] = FINGER_RADII[Math.min(s, FINGER_RADII.length - 1)];
-                        const m = new THREE.Mesh(this._makeTaperedBone(rt, rb), this._bMat(bColor, 0.82));
-                        m.visible = false;
-                        this.scene.add(m);
-                        bones.push({ mesh: m, a: chain[s], b: chain[s + 1] });
-                    }
-                }
-                for (const [a, b] of PALM_LINKS) {
-                    const m = new THREE.Mesh(this._makeTaperedBone(0.007, 0.007), this._bMat(bColor, 0.65));
-                    m.visible = false;
-                    this.scene.add(m);
-                    bones.push({ mesh: m, a, b });
-                }
-            }
-
-            _placeBone(mesh, pA, pB) {
-                const dir = new THREE.Vector3().subVectors(pB, pA);
-                const len = dir.length();
-                if (len < 0.001) { mesh.visible = false; return; }
-
-                mesh.position.copy(pA).addScaledVector(dir, 0.5);
-                mesh.scale.set(1, len, 1);
-                mesh.quaternion.setFromUnitVectors(
-                    new THREE.Vector3(0, 1, 0),
-                    dir.normalize()
-                );
-                mesh.visible = true;
-            }
-
-            _renderFrame(frame) {
-                if (!frame) return;
-                const { pose, left_hand, right_hand } = frame;
-
-                if (!pose) {
-                    this._jointMeshes.forEach(m => m.visible = false);
-                    this._boneMeshes.forEach(m => m.visible = false);
-                    this._faceMeshes.forEach(m => m.visible = false);
-                    this._spineMesh.visible = false;
-                    this._neckMesh.visible  = false;
-                    this._headSphere.visible = false;
-                } else {
-                    const P = pose.map(lm => toWorld(lm, this.mirror));
-
-                    for (let i = 0; i < 33; i++) {
-                        const vis = pose[i].v ?? 1;
-                        const isFace = i <= 10;
-                        this._jointMeshes[i].position.copy(P[i]);
-                        this._jointMeshes[i].visible = !isFace && vis > 0.35;
-                    }
-
-                    const headPos = new THREE.Vector3()
-                        .addVectors(P[POSE.L_EAR], P[POSE.R_EAR])
-                        .multiplyScalar(0.5);
-                    headPos.y += 0.06;
-                    this._headSphere.position.copy(headPos);
-                    this._headSphere.visible = true;
-
-                    const hipMid = new THREE.Vector3()
-                        .addVectors(P[POSE.L_HIP], P[POSE.R_HIP]).multiplyScalar(0.5);
-                    const shoulderMid = new THREE.Vector3()
-                        .addVectors(P[POSE.L_SHOULDER], P[POSE.R_SHOULDER]).multiplyScalar(0.5);
-                    this._placeBone(this._spineMesh, hipMid, shoulderMid);
-                    this._placeBone(this._neckMesh, shoulderMid, P[POSE.NOSE]);
-
-                    for (let i = 0; i < BODY_BONES.length; i++) {
-                        const [aIdx, bIdx] = BODY_BONES[i];
-                        this._placeBone(this._boneMeshes[i], P[aIdx], P[bIdx]);
-                    }
-
-                    for (let i = 0; i < FACE_BONES.length; i++) {
-                        const [aIdx, bIdx] = FACE_BONES[i];
-                        const visA = pose[aIdx].v ?? 1;
-                        const visB = pose[bIdx].v ?? 1;
-                        if (visA > 0.3 && visB > 0.3) {
-                            this._placeBone(this._faceMeshes[i], P[aIdx], P[bIdx]);
-                        } else {
-                            this._faceMeshes[i].visible = false;
-                        }
-                    }
-
-                    this._renderHand(left_hand,  P[POSE.L_WRIST], this._lJoints, this._lBones);
-                    this._renderHand(right_hand, P[POSE.R_WRIST], this._rJoints, this._rBones);
-                }
-            }
-
-            _renderHand(landmarks, poseWrist, joints, bones) {
-                if (!landmarks) {
-                    joints.forEach(m => m.visible = false);
-                    bones.forEach(b => b.mesh.visible = false);
-                    return;
-                }
-
-                const P = landmarks.map(lm => toWorld(lm, this.mirror));
-                const offset = poseWrist
-                    ? new THREE.Vector3().subVectors(poseWrist, P[0])
-                    : new THREE.Vector3();
-
-                const PA = P.map(p => p.clone().add(offset));
-
-                for (let i = 0; i < 21; i++) {
-                    joints[i].position.copy(PA[i]);
-                    joints[i].visible = true;
-                }
-                for (const bone of bones) {
-                    this._placeBone(bone.mesh, PA[bone.a], PA[bone.b]);
-                }
-            }
-
-            _applySmoothing(frame) {
-                if (!frame) return frame;
-
-                this._smoothPose = smoothArray(this._smoothPose, frame.pose,       EMA_ALPHA);
-                this._smoothLH   = smoothArray(this._smoothLH,   frame.left_hand,  EMA_ALPHA);
-                this._smoothRH   = smoothArray(this._smoothRH,   frame.right_hand, EMA_ALPHA);
-
+            return next.map(function(lm, i) {
                 return {
-                    pose:       this._smoothPose,
-                    left_hand:  this._smoothLH,
-                    right_hand: this._smoothRH,
+                    x: prev[i].x + alpha * (lm.x - prev[i].x),
+                    y: prev[i].y + alpha * (lm.y - prev[i].y),
+                    z: (prev[i].z || 0) + alpha * ((lm.z || 0) - (prev[i].z || 0)),
+                    v: lm.v == null ? 1 : lm.v,
                 };
-            }
-
-            _animate(time) {
-                if (this.disposed) return;
-                requestAnimationFrame(this._animate);
-
-                const rawDt = (time - this._lastTime) / 1000;
-                const dt = Math.min(rawDt, 0.1);
-                this._lastTime = time;
-
-                if (this._particles) this._particles.rotation.y += dt * 0.018;
-
-                if (this.playing && this.landmarkData) {
-                    const frameDur = 1.0 / (this.fps * this.speed);
-                    this._subT += dt / frameDur;
-
-                    while (this._subT >= 1) {
-                        this._subT -= 1;
-                        this.currentFrame++;
-                        if (this.currentFrame >= this.landmarkData.frames.length) {
-                            this.currentFrame = 0;
-                            this._smoothPose = null;
-                            this._smoothLH   = null;
-                            this._smoothRH   = null;
-                        }
-                    }
-
-                    const nextFrame = (this.currentFrame + 1) % this.landmarkData.frames.length;
-                    const blended   = lerpFrame(
-                        this.landmarkData.frames[this.currentFrame],
-                        this.landmarkData.frames[nextFrame],
-                        this._subT
-                    );
-                    const smoothed = this._applySmoothing(blended);
-                    this._renderFrame(smoothed);
-
-                    // Notify React Native of frame change
-                    if (window.ReactNativeWebView) {
-                        window.ReactNativeWebView.postMessage(JSON.stringify({
-                            type: 'FRAME_CHANGE',
-                            frame: this.currentFrame,
-                            total: this.landmarkData.frames.length
-                        }));
-                    }
-                }
-
-                this.controls.update();
-                this.composer.render();
-            }
-
-            loadData(data) {
-                this.landmarkData = data;
-                this.fps          = data.fps || 30;
-                this.currentFrame = 0;
-                this._subT        = 0;
-                this._smoothPose  = null;
-                this._smoothLH    = null;
-                this._smoothRH    = null;
-
-                if (data.width && data.height) setVideoAspect(data.width, data.height);
-
-                if (data.frames.length > 0) {
-                    this._renderFrame(data.frames[0]);
-                }
-            }
-
-            play()  { this.playing = true;  this._subT = 0; }
-            pause() { this.playing = false; }
-
-            seekFrame(idx) {
-                if (!this.landmarkData) return;
-                this.currentFrame = Math.max(0, Math.min(idx, this.landmarkData.frames.length - 1));
-                this._subT = 0;
-                this._smoothPose = null;
-                this._smoothLH   = null;
-                this._smoothRH   = null;
-                this._renderFrame(this.landmarkData.frames[this.currentFrame]);
-            }
-
-            setSpeed(s)  { this.speed  = s; }
-            setMirror(m) {
-                this.mirror = m;
-                if (this.landmarkData?.frames.length > 0)
-                    this._renderFrame(this.landmarkData.frames[this.currentFrame]);
-            }
-
-            _onResize() {
-                if (this.disposed) return;
-                const w = window.innerWidth;
-                const h = window.innerHeight;
-                this.camera.aspect = w / h;
-                this.camera.updateProjectionMatrix();
-                this.renderer.setSize(w, h);
-                this.composer.setSize(w, h);
-            }
-
-            dispose() {
-                this.disposed = true;
-                window.removeEventListener("resize", this._onResize);
-                this.controls.dispose();
-                this.renderer.dispose();
-            }
+            });
         }
+
+        function SignAvatar(canvas) {
+            this.canvas = canvas;
+            this.mirror  = false;
+            this.disposed = false;
+
+            this.landmarkData  = null;
+            this.currentFrame  = 0;
+            this.playing       = false;
+            this.speed         = 1.0;
+            this.fps           = 30;
+            this._subT         = 0;
+            this._lastTime     = 0;
+            this._smoothPose   = null;
+            this._smoothLH     = null;
+            this._smoothRH     = null;
+
+            this._boneMeshes  = [];
+            this._faceMeshes  = [];
+            this._spineMesh   = null;
+            this._neckMesh    = null;
+            this._headSphere  = null;
+            this._jointMeshes = [];
+            this._lJoints = []; this._lBones = [];
+            this._rJoints = []; this._rBones = [];
+
+            this._initScene();
+            this._buildAvatar();
+            this._animate = this._animate.bind(this);
+            this._onResize = this._onResize.bind(this);
+            window.addEventListener("resize", this._onResize);
+            this._animate(0);
+        }
+
+        SignAvatar.prototype._initScene = function() {
+            var w = window.innerWidth;
+            var h = window.innerHeight;
+
+            this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true, alpha: true });
+            this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            this.renderer.setSize(w, h);
+            this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            this.renderer.toneMappingExposure = 1.15;
+
+            this.scene  = new THREE.Scene();
+            this.camera = new THREE.PerspectiveCamera(48, w / h, 0.05, 100);
+            this.camera.position.set(0, 0.5, 7.5);
+
+            this.controls = new OrbitControls(this.camera, this.canvas);
+            this.controls.enableDamping  = true;
+            this.controls.dampingFactor  = 0.07;
+            this.controls.target.set(0, 0.2, 0);
+            this.controls.minDistance = 1.0;
+            this.controls.maxDistance = 12;
+
+            // No bloom (EffectComposer requires ES modules not available in WebView)
+            // We render directly instead
+            this.useComposer = false;
+
+            // Lighting
+            this.scene.add(new THREE.AmbientLight(0x3344aa, 0.75));
+            var key = new THREE.DirectionalLight(0xb0d0ff, 1.1);
+            key.position.set(2, 5, 4); this.scene.add(key);
+            var fill = new THREE.DirectionalLight(0x7744cc, 0.35);
+            fill.position.set(-3, 1, -2); this.scene.add(fill);
+            var rim = new THREE.DirectionalLight(0x00ffff, 0.2);
+            rim.position.set(0, -2, 3); this.scene.add(rim);
+
+            // Floor grid
+            var grid = new THREE.GridHelper(10, 32, 0x111133, 0x0a0a22);
+            grid.position.y = -2.6; this.scene.add(grid);
+
+            var pg = new THREE.PlaneGeometry(12, 12);
+            var pm = new THREE.MeshStandardMaterial({ color: 0x06060f, transparent: true, opacity: 0.55, metalness: 0.85, roughness: 0.7 });
+            var plane = new THREE.Mesh(pg, pm);
+            plane.rotation.x = -Math.PI / 2; plane.position.y = -2.62;
+            this.scene.add(plane);
+
+            this._createParticles();
+        };
+
+        SignAvatar.prototype._createParticles = function() {
+            var count = 250;
+            var pos   = new Float32Array(count * 3);
+            for (var i = 0; i < count; i++) {
+                pos[i * 3]     = (Math.random() - 0.5) * 14;
+                pos[i * 3 + 1] = (Math.random() - 0.5) * 10;
+                pos[i * 3 + 2] = (Math.random() - 0.5) * 10;
+            }
+            var geo = new THREE.BufferGeometry();
+            geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+            this._particles = new THREE.Points(geo,
+                new THREE.PointsMaterial({ color: 0x00e5ff, size: 0.018, transparent: true, opacity: 0.28, sizeAttenuation: true }));
+            this.scene.add(this._particles);
+        };
+
+        SignAvatar.prototype._jMat = function(color, ei) {
+            ei = ei || 0.65;
+            return new THREE.MeshStandardMaterial({ color: color, emissive: color, emissiveIntensity: ei, metalness: 0.15, roughness: 0.3 });
+        };
+
+        SignAvatar.prototype._bMat = function(color, opacity) {
+            opacity = opacity || 0.9;
+            return new THREE.MeshStandardMaterial({ color: color, emissive: color, emissiveIntensity: 0.22, metalness: 0.1, roughness: 0.5, transparent: opacity < 1, opacity: opacity });
+        };
+
+        SignAvatar.prototype._makeTaperedBone = function(rTop, rBot) {
+            return new THREE.CylinderGeometry(rTop, rBot, 1, 8, 1);
+        };
+
+        SignAvatar.prototype._buildAvatar = function() {
+            var BODY_J  = 0x00e5ff;
+            var BODY_B  = 0x007a8a;
+            var HAND_J  = 0xffcc44;
+            var HAND_B  = 0xe08c00;
+            var HEAD_C  = 0x22eeff;
+            var FACE_C  = 0x005566;
+            var SPINE_C = 0x0088aa;
+
+            var jGeo = new THREE.IcosahedronGeometry(0.038, 2);
+            var jMat = this._jMat(BODY_J);
+            for (var i = 0; i < 33; i++) {
+                var m = new THREE.Mesh(jGeo, jMat);
+                m.visible = false;
+                this.scene.add(m);
+                this._jointMeshes.push(m);
+            }
+
+            this._headSphere = new THREE.Mesh(
+                new THREE.IcosahedronGeometry(0.18, 3),
+                this._jMat(HEAD_C, 0.35)
+            );
+            this._headSphere.visible = false;
+            this.scene.add(this._headSphere);
+
+            this._spineMesh = new THREE.Mesh(this._makeTaperedBone(0.030, 0.026), this._bMat(SPINE_C));
+            this._spineMesh.visible = false;
+            this.scene.add(this._spineMesh);
+
+            this._neckMesh = new THREE.Mesh(this._makeTaperedBone(0.022, 0.016), this._bMat(SPINE_C));
+            this._neckMesh.visible = false;
+            this.scene.add(this._neckMesh);
+
+            for (var i = 0; i < BODY_BONES.length; i++) {
+                var rt = BODY_BONES[i][2], rb = BODY_BONES[i][3];
+                var m = new THREE.Mesh(this._makeTaperedBone(rt, rb), this._bMat(BODY_B));
+                m.visible = false;
+                this.scene.add(m);
+                this._boneMeshes.push(m);
+            }
+
+            for (var i = 0; i < FACE_BONES.length; i++) {
+                var m = new THREE.Mesh(this._makeTaperedBone(0.007, 0.007), this._bMat(FACE_C, 0.7));
+                m.visible = false;
+                this.scene.add(m);
+                this._faceMeshes.push(m);
+            }
+
+            this._buildHand(this._lJoints, this._lBones, HAND_J, HAND_B);
+            this._buildHand(this._rJoints, this._rBones, HAND_J, HAND_B);
+        };
+
+        SignAvatar.prototype._buildHand = function(joints, bones, jColor, bColor) {
+            var jGeo = new THREE.IcosahedronGeometry(0.016, 1);
+            var jMat = this._jMat(jColor, 0.75);
+
+            for (var i = 0; i < 21; i++) {
+                var m = new THREE.Mesh(jGeo, jMat);
+                m.visible = false;
+                this.scene.add(m);
+                joints.push(m);
+            }
+
+            for (var ci = 0; ci < FINGER_CHAINS.length; ci++) {
+                var chain = FINGER_CHAINS[ci];
+                for (var s = 0; s < chain.length - 1; s++) {
+                    var radii = FINGER_RADII[Math.min(s, FINGER_RADII.length - 1)];
+                    var rt = radii[0], rb = radii[1];
+                    var m = new THREE.Mesh(this._makeTaperedBone(rt, rb), this._bMat(bColor, 0.82));
+                    m.visible = false;
+                    this.scene.add(m);
+                    bones.push({ mesh: m, a: chain[s], b: chain[s + 1] });
+                }
+            }
+            for (var pi = 0; pi < PALM_LINKS.length; pi++) {
+                var a = PALM_LINKS[pi][0], b = PALM_LINKS[pi][1];
+                var m = new THREE.Mesh(this._makeTaperedBone(0.007, 0.007), this._bMat(bColor, 0.65));
+                m.visible = false;
+                this.scene.add(m);
+                bones.push({ mesh: m, a: a, b: b });
+            }
+        };
+
+        SignAvatar.prototype._placeBone = function(mesh, pA, pB) {
+            var dir = new THREE.Vector3().subVectors(pB, pA);
+            var len = dir.length();
+            if (len < 0.001) { mesh.visible = false; return; }
+
+            mesh.position.copy(pA).addScaledVector(dir, 0.5);
+            mesh.scale.set(1, len, 1);
+            mesh.quaternion.setFromUnitVectors(
+                new THREE.Vector3(0, 1, 0),
+                dir.normalize()
+            );
+            mesh.visible = true;
+        };
+
+        SignAvatar.prototype._renderFrame = function(frame) {
+            if (!frame) return;
+            var pose = frame.pose, left_hand = frame.left_hand, right_hand = frame.right_hand;
+
+            if (!pose) {
+                this._jointMeshes.forEach(function(m) { m.visible = false; });
+                this._boneMeshes.forEach(function(m) { m.visible = false; });
+                this._faceMeshes.forEach(function(m) { m.visible = false; });
+                this._spineMesh.visible = false;
+                this._neckMesh.visible  = false;
+                this._headSphere.visible = false;
+            } else {
+                var self = this;
+                var P = pose.map(function(lm) { return toWorld(lm, self.mirror); });
+
+                for (var i = 0; i < 33; i++) {
+                    var vis = pose[i].v == null ? 1 : pose[i].v;
+                    var isFace = i <= 10;
+                    this._jointMeshes[i].position.copy(P[i]);
+                    this._jointMeshes[i].visible = !isFace && vis > 0.35;
+                }
+
+                var headPos = new THREE.Vector3()
+                    .addVectors(P[POSE.L_EAR], P[POSE.R_EAR])
+                    .multiplyScalar(0.5);
+                headPos.y += 0.06;
+                this._headSphere.position.copy(headPos);
+                this._headSphere.visible = true;
+
+                var hipMid = new THREE.Vector3()
+                    .addVectors(P[POSE.L_HIP], P[POSE.R_HIP]).multiplyScalar(0.5);
+                var shoulderMid = new THREE.Vector3()
+                    .addVectors(P[POSE.L_SHOULDER], P[POSE.R_SHOULDER]).multiplyScalar(0.5);
+                this._placeBone(this._spineMesh, hipMid, shoulderMid);
+                this._placeBone(this._neckMesh, shoulderMid, P[POSE.NOSE]);
+
+                for (var i = 0; i < BODY_BONES.length; i++) {
+                    var aIdx = BODY_BONES[i][0], bIdx = BODY_BONES[i][1];
+                    this._placeBone(this._boneMeshes[i], P[aIdx], P[bIdx]);
+                }
+
+                for (var i = 0; i < FACE_BONES.length; i++) {
+                    var aIdx = FACE_BONES[i][0], bIdx = FACE_BONES[i][1];
+                    var visA = pose[aIdx].v == null ? 1 : pose[aIdx].v;
+                    var visB = pose[bIdx].v == null ? 1 : pose[bIdx].v;
+                    if (visA > 0.3 && visB > 0.3) {
+                        this._placeBone(this._faceMeshes[i], P[aIdx], P[bIdx]);
+                    } else {
+                        this._faceMeshes[i].visible = false;
+                    }
+                }
+
+                this._renderHand(left_hand,  P[POSE.L_WRIST], this._lJoints, this._lBones);
+                this._renderHand(right_hand, P[POSE.R_WRIST], this._rJoints, this._rBones);
+            }
+        };
+
+        SignAvatar.prototype._renderHand = function(landmarks, poseWrist, joints, bones) {
+            if (!landmarks) {
+                joints.forEach(function(m) { m.visible = false; });
+                bones.forEach(function(b) { b.mesh.visible = false; });
+                return;
+            }
+
+            var self = this;
+            var P = landmarks.map(function(lm) { return toWorld(lm, self.mirror); });
+            var offset = poseWrist
+                ? new THREE.Vector3().subVectors(poseWrist, P[0])
+                : new THREE.Vector3();
+
+            var PA = P.map(function(p) { return p.clone().add(offset); });
+
+            for (var i = 0; i < 21; i++) {
+                joints[i].position.copy(PA[i]);
+                joints[i].visible = true;
+            }
+            for (var bi = 0; bi < bones.length; bi++) {
+                var bone = bones[bi];
+                this._placeBone(bone.mesh, PA[bone.a], PA[bone.b]);
+            }
+        };
+
+        SignAvatar.prototype._applySmoothing = function(frame) {
+            if (!frame) return frame;
+
+            this._smoothPose = smoothArray(this._smoothPose, frame.pose,       EMA_ALPHA);
+            this._smoothLH   = smoothArray(this._smoothLH,   frame.left_hand,  EMA_ALPHA);
+            this._smoothRH   = smoothArray(this._smoothRH,   frame.right_hand, EMA_ALPHA);
+
+            return {
+                pose:       this._smoothPose,
+                left_hand:  this._smoothLH,
+                right_hand: this._smoothRH,
+            };
+        };
+
+        SignAvatar.prototype._animate = function(time) {
+            if (this.disposed) return;
+            var self = this;
+            requestAnimationFrame(function(t) { self._animate(t); });
+
+            var rawDt = (time - this._lastTime) / 1000;
+            var dt = Math.min(rawDt, 0.1);
+            this._lastTime = time;
+
+            if (this._particles) this._particles.rotation.y += dt * 0.018;
+
+            if (this.playing && this.landmarkData) {
+                var frameDur = 1.0 / (this.fps * this.speed);
+                this._subT += dt / frameDur;
+
+                while (this._subT >= 1) {
+                    this._subT -= 1;
+                    this.currentFrame++;
+                    if (this.currentFrame >= this.landmarkData.frames.length) {
+                        this.currentFrame = 0;
+                        this._smoothPose = null;
+                        this._smoothLH   = null;
+                        this._smoothRH   = null;
+                    }
+                }
+
+                var nextFrame = (this.currentFrame + 1) % this.landmarkData.frames.length;
+                var blended   = lerpFrame(
+                    this.landmarkData.frames[this.currentFrame],
+                    this.landmarkData.frames[nextFrame],
+                    this._subT
+                );
+                var smoothed = this._applySmoothing(blended);
+                this._renderFrame(smoothed);
+
+                // Notify React Native of frame change
+                if (window.ReactNativeWebView) {
+                    window.ReactNativeWebView.postMessage(JSON.stringify({
+                        type: 'FRAME_CHANGE',
+                        frame: this.currentFrame,
+                        total: this.landmarkData.frames.length
+                    }));
+                }
+            }
+
+            this.controls.update();
+            this.renderer.render(this.scene, this.camera);
+        };
+
+        SignAvatar.prototype.loadData = function(data) {
+            this.landmarkData = data;
+            this.fps          = data.fps || 30;
+            this.currentFrame = 0;
+            this._subT        = 0;
+            this._smoothPose  = null;
+            this._smoothLH    = null;
+            this._smoothRH    = null;
+
+            if (data.width && data.height) setVideoAspect(data.width, data.height);
+
+            if (data.frames.length > 0) {
+                this._renderFrame(data.frames[0]);
+            }
+        };
+
+        SignAvatar.prototype.play = function() { this.playing = true; this._subT = 0; };
+        SignAvatar.prototype.pause = function() { this.playing = false; };
+
+        SignAvatar.prototype.seekFrame = function(idx) {
+            if (!this.landmarkData) return;
+            this.currentFrame = Math.max(0, Math.min(idx, this.landmarkData.frames.length - 1));
+            this._subT = 0;
+            this._smoothPose = null;
+            this._smoothLH   = null;
+            this._smoothRH   = null;
+            this._renderFrame(this.landmarkData.frames[this.currentFrame]);
+        };
+
+        SignAvatar.prototype.setSpeed = function(s) { this.speed = s; };
+        SignAvatar.prototype.setMirror = function(m) {
+            this.mirror = m;
+            if (this.landmarkData && this.landmarkData.frames.length > 0)
+                this._renderFrame(this.landmarkData.frames[this.currentFrame]);
+        };
+
+        SignAvatar.prototype._onResize = function() {
+            if (this.disposed) return;
+            var w = window.innerWidth;
+            var h = window.innerHeight;
+            this.camera.aspect = w / h;
+            this.camera.updateProjectionMatrix();
+            this.renderer.setSize(w, h);
+        };
+
+        SignAvatar.prototype.dispose = function() {
+            this.disposed = true;
+            window.removeEventListener("resize", this._onResize);
+            this.controls.dispose();
+            this.renderer.dispose();
+        };
 
         // Initialize Avatar renderer
-        const canvas = document.getElementById("avatar-canvas");
-        const avatar = new SignAvatar(canvas);
+        var canvas = document.getElementById("avatar-canvas");
+        var avatar = new SignAvatar(canvas);
 
         // Listen for communication from React Native parent
-        window.addEventListener('message', (event) => {
+        window.addEventListener('message', function(event) {
             try {
-                const message = JSON.parse(event.data);
+                var message = JSON.parse(event.data);
                 switch (message.type) {
                     case 'LOAD_DATA':
                         avatar.loadData(message.data);
@@ -593,12 +840,38 @@
                 }
             } catch (err) {
                 // Ignore parsing errors of non-json messages
-                console.error("WebView error reading message:", err);
             }
         });
 
+        // Also listen on document for React Native WebView compatibility
+        document.addEventListener('message', function(event) {
+            try {
+                var message = JSON.parse(event.data);
+                switch (message.type) {
+                    case 'LOAD_DATA':
+                        avatar.loadData(message.data);
+                        break;
+                    case 'PLAY':
+                        avatar.play();
+                        break;
+                    case 'PAUSE':
+                        avatar.pause();
+                        break;
+                    case 'SEEK':
+                        avatar.seekFrame(message.frame);
+                        break;
+                    case 'SPEED':
+                        avatar.setSpeed(message.speed);
+                        break;
+                    case 'MIRROR':
+                        avatar.setMirror(message.mirror);
+                        break;
+                }
+            } catch (err) {}
+        });
+
         // Handle scaling corrections on window focus/load
-        window.addEventListener('load', () => {
+        window.addEventListener('load', function() {
             avatar._onResize();
         });
     </script>

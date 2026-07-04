@@ -10,21 +10,29 @@ import {
   Alert,
   Platform,
   Dimensions,
-  SafeAreaView,
   StatusBar,
+  LogBox,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import * as ImagePicker from 'expo-image-picker';
-import { Video, ResizeMode } from 'expo-av';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Asset } from 'expo-asset';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import Slider from '@react-native-community/slider';
+import { AVATAR_HTML } from './assets/avatar_view_html';
+
+LogBox.ignoreLogs([
+  /Method uploadAsync/,
+  /Method readAsStringAsync/,
+  /ImagePicker\.MediaTypeOptions/,
+]);
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // Default API URL (Fallback to standard localhost/LAN IP format)
-const DEFAULT_API_URL = 'http://192.168.1.100:8000';
+const DEFAULT_API_URL = 'http://10.219.243.115:8000';
 
 export default function App() {
   // Navigation & General state
@@ -64,36 +72,27 @@ export default function App() {
 
   // WebView reference
   const webViewRef = useRef<WebView>(null);
-  const videoPlayerRef = useRef<Video>(null);
+  
+  const player = useVideoPlayer(selectedVideoUri || null, (player) => {
+    player.loop = true;
+    player.muted = true;
+  });
 
-  // Load the bundled Three.js viewport HTML string
-  const [htmlContent, setHtmlContent] = useState<string | null>(null);
-
-  useEffect(() => {
-    async function loadHtmlAsset() {
-      try {
-        const asset = Asset.fromModule(require('./assets/avatar_view.html'));
-        await asset.downloadAsync();
-        if (asset.localUri) {
-          const content = await FileSystem.readAsStringAsync(asset.localUri);
-          setHtmlContent(content);
-        } else {
-          // Fallback if local uri isn't ready
-          const response = await fetch(asset.uri);
-          const content = await response.text();
-          setHtmlContent(content);
-        }
-      } catch (err) {
-        console.error('Error loading avatar html asset:', err);
-      }
-    }
-    loadHtmlAsset();
-  }, []);
+  // HTML content loaded via TS literal
 
   // Post messages to WebView
   const sendToWebView = (msg: any) => {
     if (webViewRef.current) {
-      webViewRef.current.postMessage(JSON.stringify(msg));
+      const msgStr = JSON.stringify(msg);
+      const jsCode = `
+        try {
+          var event = new MessageEvent('message', { data: '${msgStr}' });
+          window.dispatchEvent(event);
+          document.dispatchEvent(event);
+        } catch (e) {}
+        true;
+      `;
+      webViewRef.current.injectJavaScript(jsCode);
     }
   };
 
@@ -103,25 +102,25 @@ export default function App() {
       sendToWebView({ type: isPlaying ? 'PLAY' : 'PAUSE' });
       
       // Video synchronization
-      if (videoPlayerRef.current) {
+      if (player) {
         if (isPlaying) {
-          videoPlayerRef.current.playAsync().catch(() => {});
+          player.play();
         } else {
-          videoPlayerRef.current.pauseAsync().catch(() => {});
+          player.pause();
         }
       }
     }
-  }, [isPlaying, currentScreen]);
+  }, [isPlaying, currentScreen, player]);
 
   // Synchronise speed
   useEffect(() => {
     if (currentScreen === 'RESULT') {
       sendToWebView({ type: 'SPEED', speed: playbackSpeed });
-      if (videoPlayerRef.current) {
-        videoPlayerRef.current.setRateAsync(playbackSpeed, true).catch(() => {});
+      if (player) {
+        player.playbackRate = playbackSpeed;
       }
     }
-  }, [playbackSpeed, currentScreen]);
+  }, [playbackSpeed, currentScreen, player]);
 
   // Synchronise mirror
   useEffect(() => {
@@ -139,7 +138,7 @@ export default function App() {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+      mediaTypes: 'Videos' as any,
       allowsEditing: false,
       quality: 1,
     });
@@ -168,34 +167,32 @@ export default function App() {
     setCurrentScreen('PROCESSING');
 
     try {
-      const formData = new FormData();
-      formData.append('video', {
-        uri: selectedVideoFile.uri,
-        name: selectedVideoFile.name,
-        type: selectedVideoFile.type,
-      } as any);
-
       setProcessingProgress(0.4);
       setProcessingDetail('Sending file to server for processing...');
 
-      const response = await fetch(`${backendUrl}/api/process-video`, {
-        method: 'POST',
-        body: formData,
+      const uploadResponse = await FileSystem.uploadAsync(`${backendUrl}/api/process-video`, selectedVideoFile.uri, {
+        fieldName: 'video',
+        httpMethod: 'POST',
+        uploadType: 1 as any,
+        mimeType: selectedVideoFile.type || 'video/mp4',
         headers: {
           'Accept': 'application/json',
-          'Content-Type': 'multipart/form-data',
         },
       });
 
       setProcessingProgress(0.8);
       setProcessingDetail('Extracting MediaPipe body & hand landmarks...');
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ detail: 'Failed to process' }));
-        throw new Error(errorData.detail || 'Failed to process video on backend');
+      if (uploadResponse.status !== 200) {
+        let errMessage = 'Failed to process video on backend';
+        try {
+          const parsed = JSON.parse(uploadResponse.body);
+          if (parsed.detail) errMessage = parsed.detail;
+        } catch(e) {}
+        throw new Error(errMessage);
       }
 
-      const landmarkData = await response.json();
+      const landmarkData = JSON.parse(uploadResponse.body);
       setProcessingProgress(1.0);
       setProcessingDetail('Done!');
 
@@ -298,8 +295,8 @@ export default function App() {
 
   // Navigate back to upload screen
   const handleReset = () => {
-    if (videoPlayerRef.current) {
-      videoPlayerRef.current.unloadAsync().catch(() => {});
+    if (player) {
+      player.pause();
     }
     setLandmarkData(null);
     setSelectedVideoUri(null);
@@ -425,17 +422,14 @@ export default function App() {
                     <Ionicons name="eye-off-outline" size={18} color="#a0a8c8" />
                   </TouchableOpacity>
                 </View>
-                <Video
-                  ref={videoPlayerRef}
-                  source={{ uri: selectedVideoUri }}
-                  rate={playbackSpeed}
-                  volume={0.0}
-                  isMuted={true}
-                  resizeMode={ResizeMode.CONTAIN}
-                  shouldPlay={isPlaying}
-                  isLooping={true}
-                  style={styles.nativeVideo}
-                />
+                {player && (
+                  <VideoView
+                    player={player}
+                    style={styles.nativeVideo}
+                    contentFit="contain"
+                    nativeControls={false}
+                  />
+                )}
               </View>
             )}
 
@@ -453,23 +447,19 @@ export default function App() {
                 <Text style={[styles.panelBadge, styles.accentBadge]}>3D AVATAR RECONSTRUCTION</Text>
               </View>
               <View style={styles.avatarCanvasWrapper}>
-                {htmlContent ? (
                   <WebView
                     ref={webViewRef}
                     originWhitelist={['*']}
                     javaScriptEnabled={true}
                     domStorageEnabled={true}
                     allowFileAccess={true}
+                    allowFileAccessFromFileURLs={true}
+                    allowUniversalAccessFromFileURLs={true}
                     onMessage={onWebViewMessage}
                     onLoad={onWebViewLoad}
-                    source={{ html: htmlContent }}
+                    source={{ html: AVATAR_HTML }}
                     style={styles.webViewAvatar}
                   />
-                ) : (
-                  <View style={styles.canvasPlaceholder}>
-                    <ActivityIndicator size="small" color="#00e5ff" />
-                  </View>
-                )}
               </View>
             </View>
 

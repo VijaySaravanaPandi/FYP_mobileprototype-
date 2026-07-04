@@ -191,11 +191,10 @@ class PoseExtractor:
                     for lm in hand_lms
                 ]
 
-                # MediaPipe Tasks mirrors handedness:
-                # 'Left' in image coords = anatomical right hand
+                # Assign hands based on MediaPipe anatomical label
                 if label == "Left":
-                    frame_data["right_hand"] = landmarks
-                else:
                     frame_data["left_hand"] = landmarks
+                else:
+                    frame_data["right_hand"] = landmarks
 
         return frame_data
