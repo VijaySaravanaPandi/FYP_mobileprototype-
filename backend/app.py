@@ -447,8 +447,15 @@ async def demo_data():
 
 
 @app.get("/api/health")
-async def health():
+async def health_check():
     return {"status": "ok"}
+
+@app.get("/api/debug")
+async def debug_check():
+    import os
+    uname = os.popen('uname -a').read()
+    gl = os.popen('find /usr -name "libGLESv2.so*" 2>/dev/null').read()
+    return {"uname": uname, "gl": gl}
 
 
 # ---------------------------------------------------------------------------

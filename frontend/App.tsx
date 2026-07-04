@@ -32,7 +32,7 @@ LogBox.ignoreLogs([
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // Default API URL (Fallback to standard localhost/LAN IP format)
-const DEFAULT_API_URL = 'http://10.219.243.115:8000';
+const DEFAULT_API_URL = 'https://signavatar-backend.onrender.com';
 
 export default function App() {
   // Navigation & General state

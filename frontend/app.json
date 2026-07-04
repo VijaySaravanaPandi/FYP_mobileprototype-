@@ -20,9 +20,10 @@
       },
       "package": "com.signavatar.app",
       "permissions": [
-        "READ_EXTERNAL_STORAGE",
-        "READ_MEDIA_VIDEO",
-        "READ_MEDIA_IMAGES"
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.RECORD_AUDIO"
       ],
       "predictiveBackGestureEnabled": false
     },
@@ -34,6 +35,11 @@
           "photosPermission": "SignAvatar needs access to your gallery to select sign language videos."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "1aa52dfd-32d3-480f-bc06-88c69c1f1f17"
+      }
+    }
   }
 }
