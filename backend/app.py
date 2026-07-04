@@ -16,7 +16,6 @@ import logging
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
 
 from processing.pose_extractor import PoseExtractor
 
@@ -450,17 +449,6 @@ async def demo_data():
 @app.get("/api/health")
 async def health():
     return {"status": "ok"}
-
-
-# ---------------------------------------------------------------------------
-# Serve frontend static files
-# ---------------------------------------------------------------------------
-FRONTEND_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "frontend")
-if os.path.isdir(FRONTEND_DIR):
-    app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
-    logger.info(f"Serving frontend from {FRONTEND_DIR}")
-else:
-    logger.warning(f"Frontend directory not found: {FRONTEND_DIR}")
 
 
 # ---------------------------------------------------------------------------

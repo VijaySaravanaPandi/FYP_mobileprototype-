@@ -1,0 +1,39 @@
+{
+  "expo": {
+    "name": "SignAvatar",
+    "slug": "signavatar",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "scheme": "signavatar",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.signavatar.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#06060f",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "package": "com.signavatar.app",
+      "permissions": [
+        "READ_EXTERNAL_STORAGE",
+        "READ_MEDIA_VIDEO",
+        "READ_MEDIA_IMAGES"
+      ],
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      "expo-asset",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "SignAvatar needs access to your gallery to select sign language videos."
+        }
+      ]
+    ]
+  }
+}
