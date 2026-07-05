@@ -20,73 +20,73 @@ Convert Indian Sign Language (ISL) videos into animated 3D sign-language avatars
 
 ---
 
-## Detailed Step-by-Step Running Guide (Windows PowerShell)
+## Quick Start Running Guide (Windows PowerShell)
 
-Follow these exact steps to launch and connect both the backend and frontend components.
+Follow these exact steps to set up and launch both the backend and frontend components.
 
-### Step 1: Find Your Computer's LAN IP Address
-Since your phone needs to connect to the backend server running on your computer, both devices must be on the **same Wi-Fi network**.
-1. Open a PowerShell or Command Prompt window.
-2. Type the following command and press Enter:
-   ```powershell
-   ipconfig
-   ```
-3. Locate the **IPv4 Address** under your active network adapter (e.g., `192.168.1.17`). Note this down.
-
----
-
-### Step 2: Open the Project Directory
-Open **two separate** PowerShell terminal windows. In both windows, navigate to the folder where you saved this project.
-
-*Example command (replace the path below with the path where you saved the project on your laptop):*
+### Step 1: Run the Backend Server
+Open a **new PowerShell window** and run the following commands:
 ```powershell
-cd "C:\path\to\your\folder\FYP_mobileprototype-"
+# Navigate to the project directory
+cd "C:\Users\vijay\OneDrive\Desktop\project4\FYP_mobileprototype-"
+
+# Create a virtual environment (only needed the first time)
+python -m venv venv
+
+# Install backend dependencies (only needed the first time)
+.\venv\Scripts\pip install -r backend\requirements.txt
+
+# Start the backend server
+.\start.bat
 ```
-> [!TIP]
-> **Shortcut:** You can also open the project folder in VS Code, and open two terminals inside VS Code. They will automatically open in the correct folder!
+*(Keep this terminal open. The backend API server will start on http://localhost:8000)*
 
 ---
 
-### Step 3: Run the Backend Server
-1. In the **first** PowerShell window (navigated to the project folder), run:
-   ```powershell
-   .\start.bat
-   ```
-   *(Keep this terminal open and running. The backend API server starts on port `8000`)*.
+### Step 2: Run the Mobile App (Expo Dev Server)
+Open a **second PowerShell window** and run:
+```powershell
+# Navigate to the project directory
+cd "C:\Users\vijay\OneDrive\Desktop\project4\FYP_mobileprototype-"
+
+# Install frontend dependencies (only needed the first time)
+cd frontend
+npm install
+cd ..
+
+# Start the Expo development server in offline mode
+.\start_mobile.bat
+```
+*(Keep this terminal open. It will launch the Metro Bundler and display a QR code in the terminal).*
 
 ---
 
-### Step 4: Run the Mobile Dev Server (Expo)
-1. In the **second** PowerShell window (navigated to the project folder), run:
-   ```powershell
-   .\start_mobile.bat
-   ```
-   *(Keep this terminal open and running. It will start the Expo dev server and display a QR code)*.
-
----
-
-### Step 5: Launch and Configure the Mobile App
-1. Install the **Expo Go** app on your phone (from Google Play Store or iOS App Store).
-2. Open Expo Go (or your camera app on iOS) and scan the QR code displayed in the second PowerShell terminal.
-3. Once the app loads on your phone:
+### Step 3: Launch and Connect the App
+1. Install the **Expo Go** app on your mobile device (available on Google Play Store and iOS App Store).
+2. Ensure both your computer and your phone are connected to the **same Wi-Fi network**.
+3. Scan the QR code displayed in the second PowerShell terminal using Expo Go.
+4. Once the app loads on your phone:
    * Tap the **Settings gear icon** in the top-right corner.
-   * Update the **Backend URL** field to point to your computer's LAN IP using port `8000` (e.g., using the IP you found in Step 1):
-     ```
-     http://<YOUR_LAN_IP>:8000
-     ```
-     *(Example: `http://192.168.1.17:8000`)*
-   * Save settings and return to the main screen.
-4. Try the **Demo Mode** or upload a video from your gallery to view the 3D sign-language avatar.
+   * Update the **Backend URL** field to point to your computer's LAN IP address using port `8000` (e.g. `http://192.168.1.17:8000`).
+   * Save settings and start using the app!
 
 ---
 
-## Tech Stack
+## Troubleshooting & Common Errors
 
-| Layer    | Technology                        |
-|----------|-----------------------------------|
-| Backend  | Python, FastAPI, MediaPipe, OpenCV |
-| Frontend | React Native, Expo, TypeScript    |
-| 3D       | Three.js inside WebView           |
+### 1. Processing Error: `libGLESv2.so.2: cannot open shared object file`
+* **Why it happens:** This occurs when connecting to the online Render server (`https://signavatar-backend.onrender.com`). Render's standard Linux environment lacks the necessary GPU/OpenGL libraries required by MediaPipe.
+* **Solution:** Run the backend locally on your computer instead (using **Step 1** above) and point the mobile app to your local computer's IP address (e.g., `http://192.168.1.17:8000`).
+
+### 2. Command Error: `Interactive prompt was cancelled`
+* **Why it happens:** When running Expo, it may prompt you to log in. In non-interactive environments, this prompt cancels and crashes the server.
+* **Solution:** The project's mobile runner has been updated to use `--offline` mode automatically (`npx expo start --offline`), which skips the login prompt and starts Metro instantly.
+
+### 3. Tunnel Error: `failed to start tunnel / remote gone away`
+* **Why it happens:** The Ngrok tunnel service is blocked by your ISP, firewall, or is experiencing outages.
+* **Solution:** Use the default LAN/offline connection. Make sure both your phone and computer are on the same Wi-Fi network and connect directly using your computer's LAN IP.
+
+---
 
 ## Project Structure
 
@@ -104,6 +104,6 @@ cd "C:\path\to\your\folder\FYP_mobileprototype-"
 │   └── assets/
 │       └── avatar_view.html    # Three.js 3D avatar viewport loaded in WebView
 ├── start.bat                   # Batch script to launch backend
-├── start_mobile.bat            # Batch script to launch Expo dev server
+├── start_mobile.bat            # Batch script to launch Expo dev server (offline)
 └── README.md
 ```
