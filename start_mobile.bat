@@ -15,4 +15,4 @@ echo  Press CTRL+C to stop.
 echo.
 
 cd /d "%~dp0\frontend"
-npx expo start
+npx expo start --offline
